@@ -20,7 +20,7 @@ app = Flask(__name__)
 # Initialize speech recognizer
 recognizer = sr.Recognizer()
 
-# Initialize TTS engine
+# Initialize TTS engine (Make sure this works for your environment)
 engine = pyttsx3.init()
 
 # Initialize Sentiment Analyzer
@@ -44,7 +44,8 @@ def search_google(query):
 # Function to extract meaningful information from a webpage
 def extract_information(url):
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=5)  # Add timeout to avoid hanging indefinitely
+        response.raise_for_status()  # Raise an exception for HTTP errors
         soup = BeautifulSoup(response.text, 'html.parser')
 
         # Extract all paragraphs and concatenate them into a single string
@@ -54,6 +55,9 @@ def extract_information(url):
         # Clean up the text (remove extra spaces, newlines, etc.)
         text = re.sub(r'\s+', ' ', text)
         return text[:1000]  # Limiting to 1000 characters for summary
+    except requests.exceptions.RequestException as e:
+        print(f"Request error: {e}")
+        return None
     except Exception as e:
         print(f"Error extracting information: {e}")
         return None
@@ -90,6 +94,9 @@ def get_response():
     if not user_input:
         return jsonify({'response': "I couldn't understand that. Could you please repeat?"})
     
+    # Normalize the input
+    user_input = user_input.lower()
+
     tokens = tokenize_and_stem(user_input)
     query = " ".join(tokens)
     sentiment = analyze_sentiment(user_input)
@@ -98,16 +105,17 @@ def get_response():
     redirect_after = False
 
     # Define the responses for specific inputs
-    if any(word in query.lower() for word in ['hello', 'hi', 'hey']):
+    if any(re.search(r'\b(?:hello|hi|hey)\b', user_input)):
         response = "Hey! My name is Amunet. How can I help you today?"
-    elif any(word in query.lower() for word in ['who are you', 'what are you', 'tell me about yourself']):
+    elif any(re.search(r'\b(?:who are you|what are you|tell me about yourself)\b', user_input)):
         response = "I'm Amunet, a chatbot here to help you out. I can provide information, answer questions, and more."
-    elif any(word in query.lower() for word in ['thank you', 'thanks', 'ok']):
+    elif any(re.search(r'\b(?:thank you|thanks|ok)\b', user_input)):
         response = "You're welcome! Is there anything else I can help with?"
-    elif any(word in query.lower() for word in ['exit', 'bye', 'goodbye']):
+    elif any(re.search(r'\b(?:exit|bye|goodbye)\b', user_input)):
         response = "Goodbye! I will redirect you in 10 seconds. Feel free to ask more questions in the meantime."
         redirect_after = True
     else:
+        # Sentiment-based responses
         if sentiment == 'positive':
             response = "You sound positive! How can I assist you further today?"
         elif sentiment == 'negative':
